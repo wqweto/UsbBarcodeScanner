@@ -53,100 +53,48 @@ Attribute VB_Exposed = False
 '
 '=========================================================================
 Option Explicit
-Private Const STR_MODULE_NAME As String = "Form1"
 
 '=========================================================================
-' API
+' Constants and member variables
 '=========================================================================
 
-'--- for GetRawInputDeviceInfo
-Private Const RIDI_DEVICENAME                       As Long = &H20000007
-Private Const RIM_TYPEKEYBOARD                      As Long = 1
+Private m_vHidDevices           As Variant
 
-Private Declare Function GetRawInputDeviceList Lib "user32" (pRawInputDeviceList As Any, puiNumDevices As Long, ByVal cbSize As Long) As Long
-Private Declare Function GetRawInputDeviceInfo Lib "user32" Alias "GetRawInputDeviceInfoW" (ByVal hDevice As Long, ByVal uiCommand As Long, ByVal pData As Long, pcbSize As Long) As Long
-
-Private Type RAWINPUTDEVICELIST
-    hDevice         As Long
-    dwType          As Long
-End Type
-
-Private Sub PrintError(sFunc As String)
-    Debug.Print STR_MODULE_NAME & "." & sFunc & ": " & Error
-End Sub
-
-Private Sub cobHidDevices_Click()
-    g_sScannerHidDevice = cobHidDevices.Text
-End Sub
-
-Private Sub Form_Activate()
-    Set g_oActiveForm = Me
-End Sub
-
-Private Sub Form_Load()
-    Dim vElem           As Variant
-
-    For Each vElem In pvEnumHidDevices
-        cobHidDevices.AddItem vElem
-    Next
-End Sub
-
-Private Sub Form_Unload(Cancel As Integer)
-    Unload frmSerialScanner
-End Sub
+'=========================================================================
+' Methods
+'=========================================================================
 
 '--- callback from frmSerialScanner
 Public Sub frFireScannerReceive(sBarcode As String)
     Label1.Caption = sBarcode & "@" & Timer
 End Sub
 
-Private Function pvEnumHidDevices() As Variant
-    Const FUNC_NAME     As String = "pvEnumHidDevices"
-    Dim lNumDevices         As Long
-    Dim uList()             As RAWINPUTDEVICELIST
-    Dim lIdx                As Long
-    Dim vRet                As Variant
-    Dim lCount              As Long
-    
-    On Error GoTo EH
-    If GetRawInputDeviceList(ByVal 0&, lNumDevices, Len(uList(0))) = -1 Then
-        GoTo QH
-    End If
-    ReDim uList(0 To lNumDevices) As RAWINPUTDEVICELIST
-    If GetRawInputDeviceList(uList(0), lNumDevices, Len(uList(0))) = -1 Then
-        GoTo QH
-    End If
-    ReDim vRet(0 To lNumDevices) As String
-    For lIdx = 0 To lNumDevices - 1
-        If uList(lIdx).dwType = RIM_TYPEKEYBOARD Then
-            vRet(lCount) = pvGetHidDevice(uList(lIdx).hDevice)
-            lCount = lCount + 1
-        End If
-    Next
-    If lCount > 0 Then
-        ReDim Preserve vRet(0 To lCount - 1) As String
-        pvEnumHidDevices = vRet
-    End If
-QH:
-    Exit Function
-EH:
-    PrintError FUNC_NAME
-    Resume Next
-End Function
+'=========================================================================
+' Control events
+'=========================================================================
 
-Private Function pvGetHidDevice(ByVal hDevice As Long) As String
-    Dim lNeeded             As Long
-        
-    If GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, 0, lNeeded) <> -1 Then
-        pvGetHidDevice = String(lNeeded + 1, 0)
-        Call GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, StrPtr(pvGetHidDevice), lNeeded)
-        pvGetHidDevice = Left$(pvGetHidDevice, InStr(pvGetHidDevice, Chr$(0)) - 1)
-        If InStrRev(pvGetHidDevice, "#") > InStrRev(pvGetHidDevice, "&") Then
-            pvGetHidDevice = Left$(pvGetHidDevice, InStrRev(pvGetHidDevice, "#") - 1)
-        End If
-        If Left$(pvGetHidDevice, 4) = "\\?\" Then
-            pvGetHidDevice = Replace(Mid$(pvGetHidDevice, 5), "#", "\")
-        End If
+Private Sub Form_Load()
+    Dim vElem           As Variant
+    
+    m_vHidDevices = frmSerialScanner.EnumHidDevices
+    For Each vElem In m_vHidDevices
+        cobHidDevices.AddItem vElem(1)
+    Next
+End Sub
+
+Private Sub cobHidDevices_Click()
+    If cobHidDevices.ListIndex >= 0 Then
+        g_sScannerHidDevice = m_vHidDevices(cobHidDevices.ListIndex)(0)
+    Else
+        g_sScannerHidDevice = vbNullString
     End If
-End Function
+End Sub
+
+Private Sub Form_Activate()
+    Set g_oActiveForm = Me
+End Sub
+
+Private Sub Form_Unload(Cancel As Integer)
+    Unload frmSerialScanner
+End Sub
 
